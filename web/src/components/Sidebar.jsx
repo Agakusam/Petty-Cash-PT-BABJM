@@ -7,7 +7,8 @@ import {
   Wallet, 
   Receipt, 
   BarChart3, 
-  Settings 
+  Settings,
+  BookOpen
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { fetchFromGas } from '@/lib/api';
@@ -49,6 +50,7 @@ export default function Sidebar() {
     { name: 'Kas_log', href: '/transaksi', icon: Wallet },
     { name: 'Bon_log', href: '/bon', icon: Receipt },
     { name: 'Laporan', href: '/laporan', icon: BarChart3 },
+    { name: 'Panduan User', href: '/panduan', icon: BookOpen },
     { name: 'Pengaturan', href: '/pengaturan', icon: Settings },
   ];
 

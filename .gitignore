@@ -20,5 +20,8 @@ pnpm-debug.log*
 # OS Files
 .DS_Store
 Thumbs.db
+desktop.ini
+**/desktop.ini
 
 .vercel
+
