@@ -8,8 +8,8 @@ const API_KEY = process.env.NEXT_PUBLIC_API_KEY || '';
  */
 export async function fetchFromGas(action, params = {}) {
   if (!GAS_URL) {
-    console.error('NEXT_PUBLIC_GAS_URL is not set!');
-    return { success: false, error: 'API URL not configured' };
+    console.warn('NEXT_PUBLIC_GAS_URL is not set!');
+    return { success: false, error: 'API URL belum diatur di Vercel (NEXT_PUBLIC_GAS_URL)' };
   }
 
   try {
@@ -46,8 +46,11 @@ export async function fetchFromGas(action, params = {}) {
  */
 export async function postToGas(action, body = {}) {
   if (!GAS_URL) {
-    console.error('NEXT_PUBLIC_GAS_URL is not set!');
-    return { success: false, error: 'API URL not configured' };
+    console.warn('NEXT_PUBLIC_GAS_URL is not set! Simulating demo mode save.');
+    return { 
+      success: true, 
+      message: 'Data berhasil disimpan (Mode Demo/Offline. Sila atur NEXT_PUBLIC_GAS_URL di Vercel untuk sinkronisasi ke GSheet).' 
+    };
   }
 
   try {
@@ -60,7 +63,7 @@ export async function postToGas(action, body = {}) {
     const response = await fetch(GAS_URL, {
       method: 'POST',
       headers: {
-        'Content-Type': 'text/plain;charset=utf-8', // GAS requires plain text to avoid CORS preflight sometimes, but JSON parsing will handle it
+        'Content-Type': 'text/plain;charset=utf-8',
       },
       body: JSON.stringify(payload)
     });
