@@ -54,8 +54,6 @@ export default function Sidebar() {
     { name: 'Pengaturan', href: '/pengaturan', icon: Settings },
   ];
 
-  if (!mounted) return null;
-
   return (
     <aside className="sidebar">
       <div style={{ padding: '2rem 1.5rem', borderBottom: '1px solid var(--border)' }}>
