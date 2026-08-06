@@ -83,6 +83,23 @@ function addCodeBlock(code) {
   doc.moveDown(0.5);
 }
 
+// Helper for embedding visual images into PDF
+function addImage(imageRelPath, caption) {
+  const fullPath = path.join(__dirname, '../../public', imageRelPath);
+  if (fs.existsSync(fullPath)) {
+    doc.moveDown(0.4);
+    const imgWidth = 420;
+    const startX = (595.28 - imgWidth) / 2; // Center horizontally on A4
+    doc.image(fullPath, startX, doc.y, {
+      fit: [imgWidth, 180],
+      align: 'center'
+    });
+    doc.y += 185;
+    doc.fillColor(COLOR_MUTED).font('Helvetica-Oblique').fontSize(8).text(caption, { align: 'center' });
+    doc.moveDown(0.5);
+  }
+}
+
 // Helper for note/callout box
 function addCalloutBox(title, text, type = 'info') {
   const padding = 8;
@@ -207,6 +224,8 @@ addCodeBlock(
 addHeading1('2. MODUL 1: Panduan Penggunaan Google Sheets (GSheet)');
 addParagraph('Google Sheets berfungsi sebagai spreadsheet terpusat yang menyimpan seluruh data mentah transaksi. Sebagai staf baru, Anda perlu memahami struktur tab dan kolom berikut:');
 
+addImage('/images/gsheet_tutorial_guide.png', 'Diagram Visual Structure Google Sheets (Cash_log & Bon_log)');
+
 addHeading2('1. Tab `Cash_log` (Log Transaksi Kas Kecil)');
 addParagraph('Tab ini mencatat seluruh arus kas masuk (Debit) dan kas keluar (Kredit). Terdiri dari 12 Kolom Utama (A s/d L):');
 
@@ -251,6 +270,8 @@ addCalloutBox('ATURAN PENTING INPUT MANUAL DI GSHEET',
 // ─── PAGE 6: MODUL 2 - WEBSITE ──────────────
 addHeading1('3. MODUL 2: Panduan Penggunaan Aplikasi Website');
 addParagraph('Aplikasi website adalah antarmuka utama bagi Admin Keuangan. Buka browser dan akses tautan: https://petty-cash-babjm.vercel.app');
+
+addImage('/images/webapp_tutorial_guide.png', 'Diagram Visual Antarmuka Website Petty Cash PT BABJM');
 
 addHeading2('1. Halaman Dashboard (Ringkasan Eksekutif)');
 addParagraph('Saat pertama kali membuka web, Anda akan disajikan 3 Kartu Metrik Saldo:');
@@ -325,6 +346,8 @@ addCalloutBox('Otomatisasi Rekonsiliasi Kasbon', 'Dengan fitur Settle ini, Admin
 // ─── PAGE 10: MODUL 3 - TELEGRAM BOT ────────
 addHeading1('4. MODUL 3: Panduan Koneksi & Penggunaan Telegram Bot');
 addParagraph('Telegram Bot (@BABJM_PettyCash_bot) adalah alat tercepat untuk mencatat kas & bon langsung dari hp atau laptop tanpa perlu membuka browser web.');
+
+addImage('/images/telegram_bot_tutorial_guide.png', 'Diagram Visual Mockup & Navigasi Telegram Bot @BABJM_PettyCash_bot');
 
 addHeading2('1. Cara Menghubungkan Telegram Bot Pertama Kali');
 addParagraph('Langkah-langkah koneksi bagi karyawan baru:');
