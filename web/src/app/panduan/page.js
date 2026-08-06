@@ -140,12 +140,14 @@ export default function PanduanPage() {
               Google Sheets berfungsi sebagai database terpusat. Seluruh input dari Website maupun Telegram disimpan di spreadsheet ini.
             </p>
             
-            <div style={{ position: 'relative', borderRadius: 'var(--radius-md)', overflow: 'hidden', border: '1px solid var(--border)', background: '#0f172a', margin: '1rem 0' }}>
-              <img 
-                src="/images/gsheet_tutorial_guide.png" 
-                alt="Panduan Visual Structure Google Sheets" 
-                style={{ width: '100%', height: 'auto', display: 'block' }}
-              />
+            <div style={{ display: 'flex', justifyContent: 'center', margin: '1.5rem 0' }}>
+              <div style={{ width: '50%', maxWidth: '550px', minWidth: '280px', borderRadius: 'var(--radius-md)', overflow: 'hidden', border: '1px solid var(--border)', background: '#0f172a', boxShadow: '0 8px 24px rgba(0,0,0,0.4)' }}>
+                <img 
+                  src="/images/gsheet_tutorial_guide.png" 
+                  alt="Panduan Visual Structure Google Sheets" 
+                  style={{ width: '100%', height: 'auto', display: 'block' }}
+                />
+              </div>
             </div>
           </div>
 
@@ -244,12 +246,14 @@ export default function PanduanPage() {
               Aplikasi Website (https://petty-cash-babjm.vercel.app) digunakan oleh Admin Keuangan untuk manajemen visual penuh.
             </p>
             
-            <div style={{ position: 'relative', borderRadius: 'var(--radius-md)', overflow: 'hidden', border: '1px solid var(--border)', background: '#0f172a', margin: '1rem 0' }}>
-              <img 
-                src="/images/webapp_tutorial_guide.png" 
-                alt="Panduan Visual Website" 
-                style={{ width: '100%', height: 'auto', display: 'block' }}
-              />
+            <div style={{ display: 'flex', justifyContent: 'center', margin: '1.5rem 0' }}>
+              <div style={{ width: '50%', maxWidth: '550px', minWidth: '280px', borderRadius: 'var(--radius-md)', overflow: 'hidden', border: '1px solid var(--border)', background: '#0f172a', boxShadow: '0 8px 24px rgba(0,0,0,0.4)' }}>
+                <img 
+                  src="/images/webapp_tutorial_guide.png" 
+                  alt="Panduan Visual Website" 
+                  style={{ width: '100%', height: 'auto', display: 'block' }}
+                />
+              </div>
             </div>
           </div>
 
@@ -311,12 +315,14 @@ export default function PanduanPage() {
               Telegram Bot (@BABJM_PettyCash_bot) adalah alat input tercepat langsung dari hp/laptop Anda.
             </p>
             
-            <div style={{ position: 'relative', borderRadius: 'var(--radius-md)', overflow: 'hidden', border: '1px solid var(--border)', background: '#0f172a', margin: '1rem 0' }}>
-              <img 
-                src="/images/telegram_bot_tutorial_guide.png" 
-                alt="Panduan Visual Telegram Bot" 
-                style={{ width: '100%', height: 'auto', display: 'block' }}
-              />
+            <div style={{ display: 'flex', justifyContent: 'center', margin: '1.5rem 0' }}>
+              <div style={{ width: '50%', maxWidth: '550px', minWidth: '280px', borderRadius: 'var(--radius-md)', overflow: 'hidden', border: '1px solid var(--border)', background: '#0f172a', boxShadow: '0 8px 24px rgba(0,0,0,0.4)' }}>
+                <img 
+                  src="/images/telegram_bot_tutorial_guide.png" 
+                  alt="Panduan Visual Telegram Bot" 
+                  style={{ width: '100%', height: 'auto', display: 'block' }}
+                />
+              </div>
             </div>
           </div>
 
