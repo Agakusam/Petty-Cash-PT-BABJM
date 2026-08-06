@@ -1,4 +1,5 @@
-const GAS_URL = (process.env.NEXT_PUBLIC_GAS_URL || '').trim();
+const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbzZqxXmgtO8vXQk9Uqxs95CNPAwP6CC_o0jV2AhidCfVp-7wpwhBPQ37BWD_9bsKnM04w/exec';
+const GAS_URL = (process.env.NEXT_PUBLIC_GAS_URL || DEFAULT_GAS_URL).trim();
 const API_KEY = (process.env.NEXT_PUBLIC_API_KEY || '').trim();
 
 /**

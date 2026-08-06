@@ -6,69 +6,73 @@
  */
 
 function doGet(e) {
-  var params = (e && e.parameter) ? e.parameter : {};
-  var action = params.action || '';
+  try {
+    var params = (e && e.parameter) ? e.parameter : {};
+    var action = params.action || '';
 
-  // Health check — no auth
-  if (action === 'healthCheck') {
-    return jsonOutput(successResponse({
-      version: getConfig('APP_VERSION', '1.0.0'),
-      status: 'OK'
-    }));
-  }
-
-  // Inspect sheets — no auth for debugging
-  if (action === 'inspect') {
-    return jsonOutput(inspectSheets());
-  }
- 
-  // PIN validation — no API key needed
-  if (action === 'validatePin') {
-    var pin = params.pin || '';
-    var webPin = getWebPin();
-    var valid = !webPin || pin === webPin;
-    return jsonOutput(valid ? successResponse({ valid: true }) : errorResponse('PIN tidak valid', 401));
-  }
-
-  // API key check for all other actions
-  if (!_checkApiKey(params.api_key || params.apiKey)) {
-    return jsonOutput(errorResponse('Unauthorized', 401));
-  }
-
-  switch (action) {
-    // Cash
-    case 'listCash':
-      return jsonOutput(listCashTransactions(params));
-    case 'getSaldo':
-      return jsonOutput(getCurrentSaldo());
-    case 'rekapCash':
-      return jsonOutput(rekapCash(params));
-    case 'exportCash':
-      return jsonOutput(exportCashData(params));
-
-    // Bon
-    case 'listBon':
-      return jsonOutput(listBons(params));
-    case 'monitorBon':
-      return jsonOutput(monitorBons());
-    case 'rekapBon':
-      return jsonOutput(rekapBons());
-
-    // Dashboard
-    case 'getDashboard':
-      return jsonOutput(getDashboardData());
-    case 'rebuildDashboard':
-      var rebuildRes = setupGSheetDashboard();
-      return jsonOutput(successResponse(null, rebuildRes));
-    // Config
-    case 'getConfig':
+    // Health check — no auth
+    if (action === 'healthCheck') {
       return jsonOutput(successResponse({
-        signatures: getSignatureNames(),
-        version: getConfig('APP_VERSION', '1.0.0')
+        version: getConfig('APP_VERSION', '1.0.0'),
+        status: 'OK'
       }));
+    }
 
-    default:
-      return jsonOutput(errorResponse('Unknown action: ' + action, 404));
+    // Inspect sheets — no auth for debugging
+    if (action === 'inspect') {
+      return jsonOutput(inspectSheets());
+    }
+   
+    // PIN validation — no API key needed
+    if (action === 'validatePin') {
+      var pin = params.pin || '';
+      var webPin = getWebPin();
+      var valid = !webPin || pin === webPin;
+      return jsonOutput(valid ? successResponse({ valid: true }) : errorResponse('PIN tidak valid', 401));
+    }
+
+    // API key check for all other actions
+    if (!_checkApiKey(params.api_key || params.apiKey)) {
+      return jsonOutput(errorResponse('Unauthorized', 401));
+    }
+
+    switch (action) {
+      // Cash
+      case 'listCash':
+        return jsonOutput(listCashTransactions(params));
+      case 'getSaldo':
+        return jsonOutput(getCurrentSaldo());
+      case 'rekapCash':
+        return jsonOutput(rekapCash(params));
+      case 'exportCash':
+        return jsonOutput(exportCashData(params));
+
+      // Bon
+      case 'listBon':
+        return jsonOutput(listBons(params));
+      case 'monitorBon':
+        return jsonOutput(monitorBons());
+      case 'rekapBon':
+        return jsonOutput(rekapBons());
+
+      // Dashboard
+      case 'getDashboard':
+        return jsonOutput(getDashboardData());
+      case 'rebuildDashboard':
+        var rebuildRes = setupGSheetDashboard();
+        return jsonOutput(successResponse(null, rebuildRes));
+      // Config
+      case 'getConfig':
+        return jsonOutput(successResponse({
+          signatures: getSignatureNames(),
+          version: getConfig('APP_VERSION', '1.0.0')
+        }));
+
+      default:
+        return jsonOutput(errorResponse('Unknown action: ' + action, 404));
+    }
+  } catch (err) {
+    return jsonOutput(errorResponse(err.message || String(err), 500));
   }
 }
 

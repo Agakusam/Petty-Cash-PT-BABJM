@@ -525,3 +525,13 @@ function _recalculateCashBalances(sheet, startRow) {
 
   range.setValues(values);
 }
+
+/**
+ * Helper untuk mengambil saldo kas terakhir dari Cash_log
+ */
+function getLastSaldo() {
+  var rows = readCashData();
+  if (!rows || rows.length === 0) return 0;
+  var lastRow = rows[rows.length - 1];
+  return Number(lastRow.saldo_akhir) || 0;
+}

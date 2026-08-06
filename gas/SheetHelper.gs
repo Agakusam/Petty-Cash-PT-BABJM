@@ -59,8 +59,16 @@ function getSpreadsheet() {
 }
 
 function getSheet(name) {
-  var sheet = getSpreadsheet().getSheetByName(name);
-  if (!sheet) throw new Error('Sheet "' + name + '" tidak ditemukan');
+  var ss = getSpreadsheet();
+  var sheet = ss.getSheetByName(name);
+  if (!sheet) {
+    sheet = ss.insertSheet(name);
+    if (name === SHEETS.CASH_LOG) {
+      sheet.appendRow(["Tanggal", "Tgl. Nota", "Akun", "Keterangan Debit", "Keterangan Kredit", "PIC", "NO. ID", "Debit", "Kredit", "Saldo Akhir", "Tgl. Penagihan", "Lampiran"]);
+    } else if (name === SHEETS.BON_LOG) {
+      sheet.appendRow(["ID BON", "Tanggal", "PIC", "Keterangan", "Nominal", "Status"]);
+    }
+  }
   return sheet;
 }
 
@@ -77,16 +85,16 @@ function getBonSheet() { return getSheet(SHEETS.BON_LOG); }
 function appendCashRow(data) {
   var sheet = getCashSheet();
   var row = [
-    data.tanggal || '',
+    data.tanggal || formatDateISO(new Date()),
     data.tgl_nota || '',
-    data.akun || '',
+    data.akun || 'Operasional',
     data.keterangan_debit || '',
-    data.keterangan_kredit || '',
+    data.keterangan_kredit || (data.keterangan || ''),
     data.pic || '',
-    data.no_id || '',
-    data.debit || '',
-    data.kredit || '',
-    data.saldo_akhir || '',
+    data.no_id || generateNoId('CASH'),
+    data.debit || 0,
+    data.kredit || 0,
+    data.saldo_akhir || 0,
     data.tgl_penagihan || '',
     data.lampiran || ''
   ];
@@ -95,94 +103,100 @@ function appendCashRow(data) {
 }
 
 /**
- * Baca semua data Cash_log sebagai array of objects
- * Mulai dari row 3 (row 1 = header utama, row 2 = saldo awal)
- * @param {Object} [opts] {startRow, limit}
- * @return {Object[]}
+ * Baca semua data Cash_log
+ * Skip header (row 1 s/d 6 if formatted, or row 1)
  */
-function readCashRows(opts) {
+function readCashData() {
   var sheet = getCashSheet();
   var lastRow = sheet.getLastRow();
-  var startRow = (opts && opts.startRow) ? opts.startRow : 2;
+  if (lastRow < 2) return [];
 
-  if (lastRow < startRow) return [];
-
-  var numRows = lastRow - startRow + 1;
-  var data = sheet.getRange(startRow, 1, numRows, 12).getValues();
-  var results = [];
+  var startRow = 2;
+  var data = sheet.getRange(startRow, 1, lastRow - startRow + 1, 12).getValues();
+  var result = [];
 
   for (var i = 0; i < data.length; i++) {
-    var r = data[i];
-    results.push({
-      _row: startRow + i,
-      tanggal: r[0],
-      tgl_nota: r[1],
-      akun: r[2],
-      keterangan_debit: r[3],
-      keterangan_kredit: r[4],
-      pic: r[5],
-      no_id: r[6],
-      debit: r[7],
-      kredit: r[8],
-      saldo_akhir: r[9],
-      tgl_penagihan: r[10],
-      lampiran: r[11]
+    var row = data[i];
+    var tgl = row[0];
+    if (!tgl && !row[6] && !row[7] && !row[8]) continue; // Skip empty rows
+
+    result.push({
+      row_index: startRow + i,
+      tanggal: formatDateISO(tgl),
+      tgl_nota: formatDateISO(row[1]),
+      akun: String(row[2] || ''),
+      keterangan_debit: String(row[3] || ''),
+      keterangan_kredit: String(row[4] || ''),
+      keterangan: String(row[4] || row[3] || ''),
+      pic: String(row[5] || ''),
+      no_id: String(row[6] || ''),
+      debit: Number(row[7]) || 0,
+      kredit: Number(row[8]) || 0,
+      saldo_akhir: Number(row[9]) || 0,
+      tgl_penagihan: formatDateISO(row[10]),
+      lampiran: String(row[11] || '')
     });
   }
 
-  if (opts && opts.limit) {
-    results = results.slice(-(opts.limit));
-  }
-
-  return results;
+  return result;
 }
 
 /**
- * Ambil saldo akhir terakhir (row terakhir kolom I)
- * @return {number}
+ * Cari row Cash_log berdasarkan NO. ID (kolom G)
  */
-function getLastSaldo() {
+function findCashRowByNoId(noId) {
   var sheet = getCashSheet();
   var lastRow = sheet.getLastRow();
-  if (lastRow < 2) return 0;
+  if (lastRow < 2) return null;
 
-  var val = sheet.getRange(lastRow, CASH_COLS.SALDO_AKHIR).getValue();
-  return parseRupiah(val);
+  var ids = sheet.getRange(2, 7, lastRow - 1, 1).getValues();
+  for (var i = 0; i < ids.length; i++) {
+    if (String(ids[i][0]).trim() === String(noId).trim()) {
+      return i + 2; // 1-based row index
+    }
+  }
+  return null;
 }
 
 /**
- * Ambil data Cash_log berdasarkan rentang tanggal
- * @param {Date} dari
- * @param {Date} sampai
- * @return {Object[]}
+ * Update row Cash_log
  */
-function getCashByDateRange(dari, sampai) {
-  var all = readCashRows();
-  return all.filter(function (r) {
-    var d = parseDate(r.tanggal);
-    if (!d) return false;
-    var dTime = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-    var fromTime = new Date(dari.getFullYear(), dari.getMonth(), dari.getDate()).getTime();
-    var toTime = new Date(sampai.getFullYear(), sampai.getMonth(), sampai.getDate()).getTime();
-    return dTime >= fromTime && dTime <= toTime;
-  });
+function updateCashRow(rowIndex, data) {
+  var sheet = getCashSheet();
+  if (data.tanggal !== undefined) sheet.getRange(rowIndex, 1).setValue(data.tanggal);
+  if (data.tgl_nota !== undefined) sheet.getRange(rowIndex, 2).setValue(data.tgl_nota);
+  if (data.akun !== undefined) sheet.getRange(rowIndex, 3).setValue(data.akun);
+  if (data.keterangan_debit !== undefined) sheet.getRange(rowIndex, 4).setValue(data.keterangan_debit);
+  if (data.keterangan_kredit !== undefined) sheet.getRange(rowIndex, 5).setValue(data.keterangan_kredit);
+  if (data.pic !== undefined) sheet.getRange(rowIndex, 6).setValue(data.pic);
+  if (data.debit !== undefined) sheet.getRange(rowIndex, 8).setValue(data.debit);
+  if (data.kredit !== undefined) sheet.getRange(rowIndex, 9).setValue(data.kredit);
+  if (data.tgl_penagihan !== undefined) sheet.getRange(rowIndex, 11).setValue(data.tgl_penagihan);
+  if (data.lampiran !== undefined) sheet.getRange(rowIndex, 12).setValue(data.lampiran);
 }
 
-// ─── BON_LOG OPERATIONS ─────────────────────
+/**
+ * Hapus row Cash_log
+ */
+function deleteCashRow(rowIndex) {
+  var sheet = getCashSheet();
+  sheet.deleteRow(rowIndex);
+}
+
+// ─── BON_LOG OPERATIONS ────────────────────
 
 /**
  * Append row ke Bon_log
  * @param {Object} data {id_bon, tanggal, pic, keterangan, nominal, status}
- * @return {number}
  */
 function appendBonRow(data) {
   var sheet = getBonSheet();
   var row = [
-    data.id_bon || '',
-    data.tanggal || '',
+    data.id_bon || generateNoId('BON'),
+    data.tanggal || formatDateISO(new Date()),
     data.pic || '',
     data.keterangan || '',
-    data.nominal || '',
+    data.nominal || 0,
     data.status || 'BELUM'
   ];
   sheet.appendRow(row);
@@ -191,162 +205,113 @@ function appendBonRow(data) {
 
 /**
  * Baca semua data Bon_log
- * @return {Object[]}
  */
-function readBonRows() {
+function readBonData() {
   var sheet = getBonSheet();
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return [];
 
   var data = sheet.getRange(2, 1, lastRow - 1, 6).getValues();
-  var results = [];
+  var result = [];
 
   for (var i = 0; i < data.length; i++) {
-    var r = data[i];
-    // Skip empty rows
-    if (!r[0] && !r[2] && !r[3]) continue;
+    var row = data[i];
+    if (!row[0] && !row[2]) continue;
 
-    var rawStatus = String(r[5] || 'BELUM').trim().toUpperCase();
-    var parsedStatus = (rawStatus === 'SUDAH' || rawStatus === 'LUNAS') ? 'SUDAH' : 'BELUM';
+    var tgl = row[1];
+    var daysAgo = calculateDaysAgo(tgl);
 
-    var tanggal = parseDate(r[1]);
-    var daysAgo = tanggal ? daysBetween(tanggal, new Date()) : 0;
-    var alertLevel = 'NORMAL';
-    if (parsedStatus === 'BELUM') {
-      if (daysAgo >= BON_MAX_DAYS) alertLevel = 'OVERDUE';
-      else if (daysAgo >= BON_WARNING_DAYS) alertLevel = 'WARNING';
-    }
-
-    results.push({
-      _row: i + 2,
-      id_bon: r[0],
-      tanggal: r[1],
-      pic: r[2],
-      keterangan: r[3],
-      nominal: r[4],
-      status: parsedStatus,
+    result.push({
+      row_index: i + 2,
+      id_bon: String(row[0] || ''),
+      tanggal: formatDateISO(tgl),
+      pic: String(row[2] || ''),
+      keterangan: String(row[3] || ''),
+      nominal: Number(row[4]) || 0,
+      status: String(row[5] || 'BELUM').toUpperCase(),
       days_ago: daysAgo,
-      alert_level: alertLevel
+      alert_level: getAlertLevel(daysAgo, row[5])
     });
   }
 
-  return results;
+  return result;
 }
 
 /**
- * Cari bon berdasarkan ID
- * @param {string} bonId
- * @return {Object|null}
+ * Cari row Bon_log berdasarkan ID BON (kolom A)
  */
-function findBonById(bonId) {
-  var all = readBonRows();
-  for (var i = 0; i < all.length; i++) {
-    if (String(all[i].id_bon).toUpperCase() === String(bonId).toUpperCase()) {
-      return all[i];
+function findBonRowById(idBon) {
+  var sheet = getBonSheet();
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return null;
+
+  var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+  for (var i = 0; i < ids.length; i++) {
+    if (String(ids[i][0]).trim().toUpperCase() === String(idBon).trim().toUpperCase()) {
+      return i + 2;
     }
   }
   return null;
 }
 
 /**
- * Update status bon
- * @param {number} rowIndex
- * @param {string} newStatus
+ * Update status Bon_log ke SUDAH (Lunas)
  */
-function updateBonStatus(rowIndex, newStatus) {
+function markBonLunas(idBon) {
+  var rowIndex = findBonRowById(idBon);
+  if (!rowIndex) return false;
+
   var sheet = getBonSheet();
-  sheet.getRange(rowIndex, BON_COLS.STATUS).setValue(newStatus);
+  sheet.getRange(rowIndex, 6).setValue('SUDAH');
+  return true;
 }
 
-/**
- * Daftar bon yang belum dipertanggungjawabkan
- * @return {Object[]}
- */
-function getPendingBons() {
-  return readBonRows().filter(function (b) {
-    return String(b.status).toUpperCase() === 'BELUM';
-  });
-}
+// ─── REKALSULASI SALDO AKHIR ─────────────────────
 
 /**
- * Daftar bon yang sudah WARNING (3+ hari)
- * @return {Object[]}
+ * Hitung Ulang Kolom J (Saldo Akhir) di Cash_log dari atas ke bawah.
+ * PENTING: Dijalankan tiap kali ada insert/update/delete kas!
  */
-function getWarningBons() {
-  return getPendingBons().filter(function (b) {
-    return b.alert_level === 'WARNING' || b.alert_level === 'OVERDUE';
-  });
-}
-
-/**
- * Daftar bon yang sudah OVERDUE (7+ hari)
- * @return {Object[]}
- */
-function getOverdueBons() {
-  return getPendingBons().filter(function (b) {
-    return b.alert_level === 'OVERDUE';
-  });
-}
-
-/**
- * Migrasi kolom Cash_log: Pindahkan deskripsi Debit dari Column E (Keterangan Kredit) ke Column D (Keterangan Debit)
- */
-function migrateCashLogDescriptions() {
+function recalculateSaldoAkhir() {
   var sheet = getCashSheet();
   var lastRow = sheet.getLastRow();
-  if (lastRow < 6) return 'Tidak ada data untuk dimigrasi';
-  
-  // Ambil data mulai dari baris 6 (data pertama setelah header) sampai baris terakhir, 12 kolom
-  var range = sheet.getRange(6, 1, lastRow - 5, 12);
-  var values = range.getValues();
-  var count = 0;
-  
-  for (var i = 0; i < values.length; i++) {
-    var row = values[i];
-    var debitVal = parseRupiah(row[7]); // Index 7 is Column H (Debit)
-    
-    // Jika transaksi Debit (nominal debit > 0)
-    if (debitVal > 0) {
-      var ketDebit = row[3]; // Column D (Keterangan Debit)
-      var ketKredit = row[4]; // Column E (Keterangan Kredit / Keterangan)
-      
-      // Jika Keterangan Debit kosong tetapi Keterangan Kredit terisi, pindahkan
-      if (!ketDebit && ketKredit) {
-        row[3] = ketKredit;
-        row[4] = '';
-        count++;
-      }
-    }
+  if (lastRow < 2) return 0;
+
+  var data = sheet.getRange(2, 1, lastRow - 1, 10).getValues();
+  var runningSaldo = 0;
+  var saldos = [];
+
+  for (var i = 0; i < data.length; i++) {
+    var debit = Number(data[i][7]) || 0;
+    var kredit = Number(data[i][8]) || 0;
+    runningSaldo += (debit - kredit);
+    saldos.push([runningSaldo]);
   }
-  
-  // Tulis kembali data yang sudah diupdate
-  range.setValues(values);
-  return 'Migrasi selesai. Berhasil memindahkan ' + count + ' deskripsi transaksi Debit.';
+
+  // Write bulk back to column J
+  sheet.getRange(2, 10, saldos.length, 1).setValues(saldos);
+  return runningSaldo;
 }
 
-function getDashboardSheet() { return getSheet(SHEETS.DASHBOARD); }
+// ─── SETUP DASHBOARD VISUAL ─────────────────────
 
-/**
- * Membangun visual dashboard dan filter tanggal dinamis pada Google Sheet tab Dashboard.
- */
 function setupGSheetDashboard() {
   var ss = getSpreadsheet();
-  var d = getDashboardSheet();
-  
-  // Hard Reset
+  var d = ss.getSheetByName(SHEETS.DASHBOARD);
+  if (!d) {
+    d = ss.insertSheet(SHEETS.DASHBOARD);
+  }
   d.clear();
-  d.clearFormats();
-  d.clearConditionalFormatRules();
-  
-  // Set Column Widths
-  d.setColumnWidth(1, 20); // Spacer column A
+
+  // Styling layout
+  d.setColumnWidth(1, 20); // A margin
   d.setColumnWidth(2, 110); // B: Tanggal
   d.setColumnWidth(3, 110); // C: Tgl. Nota
-  d.setColumnWidth(4, 80);  // D: Akun
-  d.setColumnWidth(5, 220); // E: Keterangan Debit
-  d.setColumnWidth(6, 220); // F: Keterangan Kredit
-  d.setColumnWidth(7, 100); // G: PIC
-  d.setColumnWidth(8, 110); // H: NO. ID
+  d.setColumnWidth(4, 130); // D: Akun
+  d.setColumnWidth(5, 200); // E: Ket. Debit
+  d.setColumnWidth(6, 200); // F: Ket. Kredit
+  d.setColumnWidth(7, 120); // G: PIC
+  d.setColumnWidth(8, 140); // H: NO. ID
   d.setColumnWidth(9, 110); // I: Debit
   d.setColumnWidth(10, 110); // J: Kredit
   d.setColumnWidth(11, 130); // K: Saldo Akhir
