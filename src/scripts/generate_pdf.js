@@ -8,7 +8,7 @@ const doc = new PDFDocument({
   bufferPages: true
 });
 
-const outDir = path.join(__dirname, '../../../'); // root repo directory
+const outDir = path.join(__dirname, '../../'); // root repo directory
 const outPath = path.join(outDir, 'Manual_Book_PettyCash_BABJM.pdf');
 const stream = fs.createWriteStream(outPath);
 doc.pipe(stream);
