@@ -1,5 +1,5 @@
-const GAS_URL = process.env.NEXT_PUBLIC_GAS_URL;
-const API_KEY = process.env.NEXT_PUBLIC_API_KEY || '';
+const GAS_URL = (process.env.NEXT_PUBLIC_GAS_URL || '').trim();
+const API_KEY = (process.env.NEXT_PUBLIC_API_KEY || '').trim();
 
 /**
  * Fetch data from Google Apps Script Web App
@@ -15,17 +15,18 @@ export async function fetchFromGas(action, params = {}) {
   try {
     const url = new URL(GAS_URL);
     url.searchParams.append('action', action);
-    url.searchParams.append('api_key', API_KEY);
+    if (API_KEY) url.searchParams.append('api_key', API_KEY);
     
     Object.keys(params).forEach(key => {
       url.searchParams.append(key, params[key]);
     });
     
-    // Add cache-busting timestamp to prevent browser/CDN caching
+    // Add cache-busting timestamp
     url.searchParams.append('_t', Date.now().toString());
 
     const response = await fetch(url.toString(), {
-      cache: 'no-store' // Ensure we get fresh data
+      cache: 'no-store',
+      redirect: 'follow'
     });
     
     if (!response.ok) {
@@ -35,7 +36,11 @@ export async function fetchFromGas(action, params = {}) {
     return await response.json();
   } catch (error) {
     console.error(`API Error (${action}):`, error);
-    return { success: false, error: error.message };
+    let errorMsg = error.message;
+    if (errorMsg === 'Failed to fetch') {
+      errorMsg = 'Gagal mengakses Google Apps Script. Pastikan "Yang memiliki akses" diatur ke "Siapa saja" (Anyone) pada opsi Web App Deployment di Google Apps Script.';
+    }
+    return { success: false, error: errorMsg };
   }
 }
 
@@ -46,7 +51,7 @@ export async function fetchFromGas(action, params = {}) {
  */
 export async function postToGas(action, body = {}) {
   if (!GAS_URL) {
-    console.warn('NEXT_PUBLIC_GAS_URL is not set! Simulating demo mode save.');
+    console.warn('NEXT_PUBLIC_GAS_URL is not set!');
     return { 
       success: true, 
       message: 'Data berhasil disimpan (Mode Demo/Offline. Sila atur NEXT_PUBLIC_GAS_URL di Vercel untuk sinkronisasi ke GSheet).' 
@@ -65,7 +70,8 @@ export async function postToGas(action, body = {}) {
       headers: {
         'Content-Type': 'text/plain;charset=utf-8',
       },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
+      redirect: 'follow'
     });
     
     if (!response.ok) {
@@ -75,6 +81,10 @@ export async function postToGas(action, body = {}) {
     return await response.json();
   } catch (error) {
     console.error(`API POST Error (${action}):`, error);
-    return { success: false, error: error.message };
+    let errorMsg = error.message;
+    if (errorMsg === 'Failed to fetch') {
+      errorMsg = 'Gagal mengirim data ke Google Apps Script. Pastikan "Yang memiliki akses" diatur ke "Siapa saja" (Anyone) pada opsi Web App Deployment.';
+    }
+    return { success: false, error: errorMsg };
   }
 }
