@@ -34,6 +34,16 @@ function generateBonId(sheet) {
   return prefix + _pad(counter, 3);
 }
 
+/**
+ * Universal ID Generator untuk CASH dan BON
+ */
+function generateNoId(prefix) {
+  prefix = (prefix || 'TRX').toUpperCase();
+  var today = _formatDateCompact(new Date());
+  var randomSuffix = Math.floor(100 + Math.random() * 900);
+  return prefix + '-' + today + '-' + randomSuffix;
+}
+
 // ─── DATE FORMATTERS ────────────────────────
 
 function _formatDateCompact(d) {
