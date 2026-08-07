@@ -133,6 +133,7 @@ function readCashData() {
     if (!tgl && !row[6] && !row[7] && !row[8]) continue; // Skip empty rows
 
     result.push({
+      _row: startRow + i,
       row_index: startRow + i,
       tanggal: formatDateISO(tgl),
       tgl_nota: formatDateISO(row[1]),
@@ -151,6 +152,36 @@ function readCashData() {
   }
 
   return result;
+}
+
+/**
+ * Alias untuk kompatibilitas
+ */
+function readCashRows(options) {
+  var rows = readCashData();
+  if (options && options.limit && options.limit > 0 && rows.length > options.limit) {
+    return rows.slice(rows.length - options.limit);
+  }
+  return rows;
+}
+
+/**
+ * Ambil transaksi kas berdasarkan rentang tanggal
+ */
+function getCashByDateRange(startDate, endDate) {
+  var rows = readCashData();
+  if (!startDate || !endDate) return rows;
+  
+  var sTime = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate()).getTime();
+  var eTime = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate(), 23, 59, 59).getTime();
+
+  return rows.filter(function(r) {
+    if (!r.tanggal) return false;
+    var d = parseDate(r.tanggal);
+    if (!d) return false;
+    var t = d.getTime();
+    return t >= sTime && t <= eTime;
+  });
 }
 
 /**
@@ -233,6 +264,7 @@ function readBonData() {
     var daysAgo = calculateDaysAgo(tgl);
 
     result.push({
+      _row: i + 2,
       row_index: i + 2,
       id_bon: String(row[0] || ''),
       tanggal: formatDateISO(tgl),
@@ -249,20 +281,68 @@ function readBonData() {
 }
 
 /**
- * Cari row Buku Bon berdasarkan ID BON (kolom A)
+ * Alias untuk kompatibilitas
  */
-function findBonRowById(idBon) {
-  var sheet = getBonSheet();
-  var lastRow = sheet.getLastRow();
-  if (lastRow < 2) return null;
+function readBonRows(options) {
+  var rows = readBonData();
+  if (options && options.limit && options.limit > 0 && rows.length > options.limit) {
+    return rows.slice(rows.length - options.limit);
+  }
+  return rows;
+}
 
-  var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
-  for (var i = 0; i < ids.length; i++) {
-    if (String(ids[i][0]).trim().toUpperCase() === String(idBon).trim().toUpperCase()) {
-      return i + 2;
+/**
+ * Ambil daftar bon yang belum dipertanggungjawabkan
+ */
+function getPendingBons() {
+  var all = readBonData();
+  return all.filter(function(b) {
+    var st = String(b.status || '').trim().toUpperCase();
+    return st === 'BELUM' || st === 'PENDING' || st === '';
+  });
+}
+
+function getWarningBons() {
+  return getPendingBons().filter(function(b) {
+    return b.alert_level === 'WARNING';
+  });
+}
+
+function getOverdueBons() {
+  return getPendingBons().filter(function(b) {
+    return b.alert_level === 'OVERDUE';
+  });
+}
+
+/**
+ * Cari bon berdasarkan ID BON (kolom A)
+ */
+function findBonById(idBon) {
+  if (!idBon) return null;
+  var rows = readBonData();
+  var target = String(idBon).trim().toUpperCase();
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i].id_bon).trim().toUpperCase() === target) {
+      return rows[i];
     }
   }
   return null;
+}
+
+/**
+ * Cari row Buku Bon berdasarkan ID BON (kolom A)
+ */
+function findBonRowById(idBon) {
+  var bon = findBonById(idBon);
+  return bon ? bon._row : null;
+}
+
+/**
+ * Update status Buku Bon
+ */
+function updateBonStatus(rowIndex, newStatus) {
+  var sheet = getBonSheet();
+  sheet.getRange(rowIndex, 6).setValue(newStatus);
 }
 
 /**
@@ -271,13 +351,11 @@ function findBonRowById(idBon) {
 function markBonLunas(idBon) {
   var rowIndex = findBonRowById(idBon);
   if (!rowIndex) return false;
-
-  var sheet = getBonSheet();
-  sheet.getRange(rowIndex, 6).setValue('SUDAH');
+  updateBonStatus(rowIndex, 'SUDAH');
   return true;
 }
 
-// ─── REKALSULASI SALDO AKHIR ─────────────────────
+// ─── REKALKULASI SALDO AKHIR ─────────────────────
 
 /**
  * Hitung Ulang Kolom J (Saldo Akhir) di Buku Kas dari atas ke bawah.
@@ -301,6 +379,13 @@ function recalculateSaldoAkhir() {
   // Write bulk back to column J
   sheet.getRange(2, 10, saldos.length, 1).setValues(saldos);
   return runningSaldo;
+}
+
+/**
+ * Alias kompatibilitas untuk rekalkulasi saldo kas
+ */
+function _recalculateCashBalances(sheet, startRow) {
+  return recalculateSaldoAkhir();
 }
 
 // ─── SETUP DASHBOARD VISUAL ─────────────────────

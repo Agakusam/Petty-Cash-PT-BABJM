@@ -349,7 +349,7 @@ function editCashTransactionsBulk(body) {
   for (var i = 0; i < list.length; i++) {
     var trx = list[i];
     var row = parseInt(trx._row);
-    if (isNaN(row) || row < 7 || row > lastRow) {
+    if (isNaN(row) || row < 2 || row > lastRow) {
       return errorResponse('Baris transaksi tidak valid: ' + trx._row);
     }
 
@@ -415,7 +415,7 @@ function deleteCashTransactions(body) {
 
   // Sort descending to avoid index shifting when deleting
   rowsToDelete = rowsToDelete.map(Number).filter(function(r) {
-    return !isNaN(r) && r >= 7;
+    return !isNaN(r) && r >= 2;
   }).sort(function(a, b) {
     return b - a;
   });
