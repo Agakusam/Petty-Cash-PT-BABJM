@@ -363,16 +363,31 @@ function _syncBonRowToCash(row) {
   var pic = String(values[2] || '').trim();
   var keterangan = String(values[3] || '').trim();
   var nominal = parseRupiah(values[4]);
-  var status = String(values[5] || 'BELUM').trim().toUpperCase();
+  var rawStatus = String(values[5] || '').trim();
+  var status = rawStatus ? rawStatus.toUpperCase() : 'BELUM';
   
   // Jika PIC atau nominal belum diisi lengkap/valid, jangan sinkronkan dulu
   if (!pic || nominal <= 0) return;
 
-  // Auto-generate ID BON jika kosong
+  // 1. Auto-set Status ke 'BELUM' di Kolom F jika kosong
+  if (!rawStatus) {
+    sheet.getRange(row, 6).setValue('BELUM');
+  }
+
+  // 2. Auto-generate ID BON jika Kolom A kosong
   if (!idBon) {
     idBon = generateNoId('BON');
     sheet.getRange(row, 1).setValue(idBon);
   }
+
+  // 3. Auto-fill Tanggal di Kolom B jika kosong
+  if (!tglRaw) {
+    tglRaw = new Date();
+    sheet.getRange(row, 2).setValue(formatDateISO(tglRaw));
+  }
+
+  // 4. Format Nominal di Kolom E sebagai Rupiah
+  sheet.getRange(row, 5).setNumberFormat('[$Rp-421] #,##0');
   
   // Cek apakah transaksi Kredit (bon baru) atau Debit (pertanggungan) sudah ada di Cash_log
   var cashRows = readCashData();
@@ -391,7 +406,7 @@ function _syncBonRowToCash(row) {
     }
   }
   
-  // 1. Jika Kredit belum ada di Cash_log, buat transaksi Kredit (Kas Keluar)
+  // 5. Jika Kredit belum ada di Cash_log, buat transaksi Kredit (Kas Keluar)
   if (!existKredit) {
     appendCashRow({
       keterangan_kredit: 'Bon - ' + pic + ' - ' + (keterangan || 'Kasbon Karyawan'),
@@ -407,7 +422,7 @@ function _syncBonRowToCash(row) {
     recalculateSaldoAkhir();
   }
   
-  // 2. Jika status diset ke SUDAH / LUNAS, dan Debit belum ada, buat transaksi Debit (Kas Masuk / Pertanggungan)
+  // 6. Jika status diset ke SUDAH / LUNAS, dan Debit belum ada, buat transaksi Debit (Kas Masuk / Pertanggungan)
   if ((status === 'SUDAH' || status === 'LUNAS') && !existDebit) {
     appendCashRow({
       keterangan_debit: 'Pertanggungan Bon - ' + pic + ' - ' + (keterangan || 'Kasbon Karyawan'),
@@ -422,6 +437,19 @@ function _syncBonRowToCash(row) {
     });
     recalculateSaldoAkhir();
   }
+}
+
+/**
+ * Pindai & Sinkronkan SELURUH baris di Bon_log ke Cash_log
+ */
+function syncAllBonsToCash() {
+  var sheet = getBonSheet();
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return 'TIDAK_ADA_BON';
+  for (var r = 2; r <= lastRow; r++) {
+    _syncBonRowToCash(r);
+  }
+  return 'SINKRONISASI_SELESAI';
 }
 
 function testOnEdit() {
