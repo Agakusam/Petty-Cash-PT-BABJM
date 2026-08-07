@@ -27,7 +27,7 @@ function addBon(params) {
     tanggal: tanggal,
     pic: String(params.pic).trim(),
     keterangan: String(params.keterangan).trim(),
-    nominal: formatRupiah(amount),
+    nominal: amount,  // Simpan sebagai ANGKA, bukan formatRupiah
     status: 'BELUM'
   };
 
@@ -71,7 +71,8 @@ function settleBon(params) {
   updateBonStatus(bon._row, 'SUDAH');
 
   // Catat pengembalian/pertanggungan sebagai transaksi kas masuk (Debit) saat diselesaikan
-  var nominal = parseRupiah(bon.nominal);
+  // parseRupiah safety net: backward compat jika nominal masih string
+  var nominal = (typeof bon.nominal === 'number') ? bon.nominal : parseRupiah(bon.nominal);
   addCashTransaction({
     keterangan: 'Pertanggungan Bon - ' + bon.pic + ' - ' + bon.keterangan,
     jumlah: nominal,
@@ -240,7 +241,8 @@ function editBonsBulk(body) {
     sheet.getRange(row, BON_COLS.TANGGAL).setValue(tanggal);
     sheet.getRange(row, BON_COLS.PIC).setValue(pic);
     sheet.getRange(row, BON_COLS.KETERANGAN).setValue(keterangan);
-    sheet.getRange(row, BON_COLS.NOMINAL).setValue(nominal);
+    sheet.getRange(row, BON_COLS.NOMINAL).setValue(amount);  // Simpan sebagai ANGKA
+    sheet.getRange(row, BON_COLS.NOMINAL).setNumberFormat('[$Rp-421] #,##0');
     sheet.getRange(row, BON_COLS.STATUS).setValue(newStatus);
 
     // Sync with Cash_log
@@ -277,19 +279,24 @@ function editBonsBulk(body) {
     for (var k = 0; k < cashRows.length; k++) {
       var cRow = cashRows[k];
       if (String(cRow.no_id).trim().toUpperCase() === currentId.toUpperCase()) {
-        var isKredit = parseRupiah(cRow.kredit) > 0;
-        var isDebit = parseRupiah(cRow.debit) > 0;
+        // parseRupiah safety net untuk backward compat
+        var cashKredit = (typeof cRow.kredit === 'number') ? cRow.kredit : parseRupiah(cRow.kredit);
+        var cashDebit = (typeof cRow.debit === 'number') ? cRow.debit : parseRupiah(cRow.debit);
+        var isKredit = cashKredit > 0;
+        var isDebit = cashDebit > 0;
 
         if (isKredit) {
           cashSheet.getRange(cRow._row, CASH_COLS.TANGGAL).setValue(tanggal);
           cashSheet.getRange(cRow._row, CASH_COLS.PIC).setValue(pic);
           cashSheet.getRange(cRow._row, CASH_COLS.KETERANGAN_KREDIT).setValue('Bon - ' + pic + ' - ' + keterangan);
-          cashSheet.getRange(cRow._row, CASH_COLS.KREDIT).setValue(nominal);
+          cashSheet.getRange(cRow._row, CASH_COLS.KREDIT).setValue(amount);  // ANGKA
+          cashSheet.getRange(cRow._row, CASH_COLS.KREDIT).setNumberFormat('[$Rp-421] #,##0');
           if (cRow._row < minUpdatedCashRow) minUpdatedCashRow = cRow._row;
         } else if (isDebit) {
           cashSheet.getRange(cRow._row, CASH_COLS.PIC).setValue(pic);
           cashSheet.getRange(cRow._row, CASH_COLS.KETERANGAN_DEBIT).setValue('Pertanggungan Bon - ' + pic + ' - ' + keterangan);
-          cashSheet.getRange(cRow._row, CASH_COLS.DEBIT).setValue(nominal);
+          cashSheet.getRange(cRow._row, CASH_COLS.DEBIT).setValue(amount);  // ANGKA
+          cashSheet.getRange(cRow._row, CASH_COLS.DEBIT).setNumberFormat('[$Rp-421] #,##0');
           if (cRow._row < minUpdatedCashRow) minUpdatedCashRow = cRow._row;
         }
       }

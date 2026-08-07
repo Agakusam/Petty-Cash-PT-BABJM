@@ -305,7 +305,7 @@ function fullSetup() {
 
 /**
  * Simple & Installed Trigger onEdit Google Sheets
- * Otomatis berjalan setiap kali ada pengeditan di Google Spreadsheet (Cash_log atau Bon_log)
+ * Otomatis berjalan setiap kali ada pengeditan di Google Spreadsheet (Buku Kas atau Buku Bon)
  */
 function onEdit(e) {
   if (!e) return;
@@ -353,7 +353,7 @@ function setupEditTrigger() {
 }
 
 /**
- * Sinkronisasikan satu baris bon di Bon_log ke Cash_log
+ * Sinkronisasikan satu baris bon di Buku Bon ke Buku Kas
  */
 function _syncBonRowToCash(row) {
   var sheet = getBonSheet();
@@ -362,7 +362,8 @@ function _syncBonRowToCash(row) {
   var tglRaw = values[1];
   var pic = String(values[2] || '').trim();
   var keterangan = String(values[3] || '').trim();
-  var nominal = parseRupiah(values[4]);
+  // parseRupiah safety net: backward compat jika nominal masih string
+  var nominal = (typeof values[4] === 'number') ? values[4] : parseRupiah(values[4]);
   var rawStatus = String(values[5] || '').trim();
   var status = rawStatus ? rawStatus.toUpperCase() : 'BELUM';
   
@@ -389,7 +390,7 @@ function _syncBonRowToCash(row) {
   // 4. Format Nominal di Kolom E sebagai Rupiah
   sheet.getRange(row, 5).setNumberFormat('[$Rp-421] #,##0');
   
-  // Cek apakah transaksi Kredit (bon baru) atau Debit (pertanggungan) sudah ada di Cash_log
+  // Cek apakah transaksi Kredit (bon baru) atau Debit (pertanggungan) sudah ada di Buku Kas
   var cashRows = readCashData();
   var existKredit = false;
   var existDebit = false;
@@ -397,16 +398,19 @@ function _syncBonRowToCash(row) {
   for (var i = 0; i < cashRows.length; i++) {
     var cashRow = cashRows[i];
     if (String(cashRow.no_id).trim().toUpperCase() === idBon.toUpperCase()) {
-      if (Number(cashRow.kredit) > 0) {
+      // parseRupiah safety net: backward compat jika data masih string
+      var kreditVal = (typeof cashRow.kredit === 'number') ? cashRow.kredit : parseRupiah(cashRow.kredit);
+      var debitVal = (typeof cashRow.debit === 'number') ? cashRow.debit : parseRupiah(cashRow.debit);
+      if (kreditVal > 0) {
         existKredit = true;
       }
-      if (Number(cashRow.debit) > 0) {
+      if (debitVal > 0) {
         existDebit = true;
       }
     }
   }
   
-  // 5. Jika Kredit belum ada di Cash_log, buat transaksi Kredit (Kas Keluar)
+  // 5. Jika Kredit belum ada di Buku Kas, buat transaksi Kredit (Kas Keluar)
   if (!existKredit) {
     appendCashRow({
       keterangan_kredit: 'Bon - ' + pic + ' - ' + (keterangan || 'Kasbon Karyawan'),
@@ -440,7 +444,7 @@ function _syncBonRowToCash(row) {
 }
 
 /**
- * Pindai & Sinkronkan SELURUH baris di Bon_log ke Cash_log
+ * Pindai & Sinkronkan SELURUH baris di Buku Bon ke Buku Kas
  */
 function syncAllBonsToCash() {
   var sheet = getBonSheet();

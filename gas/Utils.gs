@@ -66,6 +66,15 @@ function formatDateSheet(d) {
  */
 function formatDateISO(d) {
   if (!d) return '';
+  if (typeof d === 'string') {
+    // Jika sudah string ISO, kembalikan langsung
+    if (d.match(/^\d{4}-\d{2}-\d{2}/)) return d.substring(0, 10);
+    // Coba parse dulu
+    var parsed = parseDate(d);
+    if (!parsed) return '';
+    d = parsed;
+  }
+  if (!(d instanceof Date) || isNaN(d.getTime())) return '';
   return d.getFullYear() + '-' + _pad(d.getMonth() + 1, 2) + '-' + _pad(d.getDate(), 2);
 }
 
@@ -312,4 +321,28 @@ function escapeHtml(str) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+/**
+ * Hitung berapa hari yang lalu dari tanggal transaksi sampai hari ini
+ */
+function calculateDaysAgo(dateVal) {
+  if (!dateVal) return 0;
+  var d = parseDate(dateVal);
+  if (!d) return 0;
+  return daysBetween(d, new Date());
+}
+
+/**
+ * Dapatkan tingkat alert untuk status bon
+ * @param {number} daysAgo 
+ * @param {string} status 
+ * @return {'NORMAL' | 'WARNING' | 'OVERDUE' | 'LUNAS'}
+ */
+function getAlertLevel(daysAgo, status) {
+  var st = String(status || '').trim().toUpperCase();
+  if (st === 'SUDAH' || st === 'LUNAS') return 'LUNAS';
+  if (daysAgo >= BON_MAX_DAYS) return 'OVERDUE';
+  if (daysAgo >= BON_WARNING_DAYS) return 'WARNING';
+  return 'NORMAL';
 }

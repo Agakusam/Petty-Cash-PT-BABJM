@@ -46,7 +46,7 @@ function addCashTransaction(params) {
   // Format tanggal
   var tanggal = params.tanggal ? parseDate(params.tanggal) || new Date() : new Date();
 
-  // Build row data
+  // Build row data — simpan Debit/Kredit/Saldo sebagai ANGKA (bukan string Rupiah)
   var rowData = {
     tanggal: tanggal,
     tgl_nota: params.tgl_nota || '',
@@ -55,9 +55,9 @@ function addCashTransaction(params) {
     keterangan_kredit: jenis === 'KREDIT' ? String(params.keterangan).trim() : '',
     pic: params.pic || '',
     no_id: params.no_id || '',
-    debit: jenis === 'DEBIT' ? formatRupiah(amount) : 'Rp -',
-    kredit: jenis === 'KREDIT' ? formatRupiah(amount) : '',
-    saldo_akhir: formatRupiah(newSaldo),
+    debit: jenis === 'DEBIT' ? amount : 0,
+    kredit: jenis === 'KREDIT' ? amount : 0,
+    saldo_akhir: newSaldo,
     tgl_penagihan: params.tgl_penagihan || '',
     lampiran: params.lampiran || ''
   };
@@ -365,9 +365,9 @@ function editCashTransactionsBulk(body) {
 
     var tanggal = trx.tanggal ? parseDate(trx.tanggal) || new Date() : new Date();
 
-    // Format fields
-    var debit = jenis === 'DEBIT' ? formatRupiah(amount) : 'Rp -';
-    var kredit = jenis === 'KREDIT' ? formatRupiah(amount) : '';
+    // Format fields — simpan sebagai ANGKA
+    var debit = jenis === 'DEBIT' ? amount : 0;
+    var kredit = jenis === 'KREDIT' ? amount : 0;
     var ketDebit = jenis === 'DEBIT' ? String(trx.keterangan).trim() : '';
     var ketKredit = jenis === 'KREDIT' ? String(trx.keterangan).trim() : '';
 
@@ -383,6 +383,8 @@ function editCashTransactionsBulk(body) {
       debit,
       kredit
     ]]);
+    // Set format Rupiah pada kolom H, I
+    sheet.getRange(row, 8, 1, 2).setNumberFormat('[$Rp-421] #,##0');
 
     // Columns K to L (tgl_penagihan, lampiran)
     sheet.getRange(row, 11, 1, 2).setValues([[
@@ -472,11 +474,11 @@ function importCashTransactionsBulk(body) {
       tglNotaDate || '',                                      // Tgl. Nota
       t.akun || '',                                          // Akun
       jenis === 'DEBIT' ? String(t.keterangan).trim() : '',   // Keterangan Debit
-      jenis === 'KREDIT' ? String(t.keterangan).trim() : '',  // Keterangan Kredit (Keterangan)
+      jenis === 'KREDIT' ? String(t.keterangan).trim() : '',  // Keterangan Kredit
       t.pic || '',                                           // PIC
       t.no_id || '',                                         // NO. ID
-      jenis === 'DEBIT' ? formatRupiah(amount) : 'Rp -',      // Debit
-      jenis === 'KREDIT' ? formatRupiah(amount) : '',        // Kredit
+      jenis === 'DEBIT' ? amount : 0,                         // Debit (ANGKA)
+      jenis === 'KREDIT' ? amount : 0,                        // Kredit (ANGKA)
       '',                                                    // Saldo Akhir (will be calculated below)
       tglPenagihanDate || '',                                 // Tgl. Penagihan
       t.lampiran || ''                                       // Lampiran
@@ -487,6 +489,8 @@ function importCashTransactionsBulk(body) {
   // Batch insert rows
   var range = sheet.getRange(startRow, 1, rowsToAppend.length, 12);
   range.setValues(rowsToAppend);
+  // Set format Rupiah pada kolom H, I, J
+  sheet.getRange(startRow, 8, rowsToAppend.length, 3).setNumberFormat('[$Rp-421] #,##0');
 
   // Recalculate balances starting from startRow
   _recalculateCashBalances(sheet, startRow);
@@ -495,43 +499,14 @@ function importCashTransactionsBulk(body) {
 }
 
 /**
- * Rekalkulasi saldo akhir dari startRow ke baris terakhir
- */
-function _recalculateCashBalances(sheet, startRow) {
-  var lastRow = sheet.getLastRow();
-  if (startRow > lastRow) return;
-
-  var prevSaldo = 0;
-  if (startRow > 6) {
-    prevSaldo = parseRupiah(sheet.getRange(startRow - 1, CASH_COLS.SALDO_AKHIR).getValue());
-  } else {
-    prevSaldo = parseRupiah(sheet.getRange(6, CASH_COLS.SALDO_AKHIR).getValue());
-    startRow = 7;
-  }
-
-  var numRows = lastRow - startRow + 1;
-  if (numRows <= 0) return;
-
-  var range = sheet.getRange(startRow, 8, numRows, 3); // Col 8, 9, 10 (Debit, Kredit, Saldo Akhir)
-  var values = range.getValues();
-
-  var runningSaldo = prevSaldo;
-  for (var i = 0; i < values.length; i++) {
-    var debVal = parseRupiah(values[i][0]);
-    var kreVal = parseRupiah(values[i][1]);
-    runningSaldo = runningSaldo + debVal - kreVal;
-    values[i][2] = formatRupiah(runningSaldo);
-  }
-
-  range.setValues(values);
-}
-
-/**
- * Helper untuk mengambil saldo kas terakhir dari Cash_log
+ * Helper untuk mengambil saldo kas terakhir dari Buku Kas
  */
 function getLastSaldo() {
   var rows = readCashData();
   if (!rows || rows.length === 0) return 0;
   var lastRow = rows[rows.length - 1];
-  return Number(lastRow.saldo_akhir) || 0;
+  // parseRupiah safety net: backward compat jika saldo masih string
+  var saldo = lastRow.saldo_akhir;
+  if (typeof saldo === 'number') return saldo;
+  return parseRupiah(saldo) || 0;
 }

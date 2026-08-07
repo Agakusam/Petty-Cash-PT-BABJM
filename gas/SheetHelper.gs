@@ -97,22 +97,30 @@ function getBonSheet() { return getSheet(SHEETS.BON_LOG); }
  */
 function appendCashRow(data) {
   var sheet = getCashSheet();
+  // Pastikan debit/kredit/saldo adalah angka
+  var debitVal = typeof data.debit === 'number' ? data.debit : parseRupiah(data.debit);
+  var kreditVal = typeof data.kredit === 'number' ? data.kredit : parseRupiah(data.kredit);
+  var saldoVal = typeof data.saldo_akhir === 'number' ? data.saldo_akhir : parseRupiah(data.saldo_akhir);
+
   var row = [
     data.tanggal || formatDateISO(new Date()),
     data.tgl_nota || '',
-    data.akun || 'Operasional',
-    data.keterangan_debit || '',
+    data.akun || '',
+    data.keterangan_debit || (data.keterangan || ''),
     data.keterangan_kredit || (data.keterangan || ''),
     data.pic || '',
-    data.no_id || generateNoId('CASH'),
-    data.debit || 0,
-    data.kredit || 0,
-    data.saldo_akhir || 0,
+    data.no_id || '',
+    debitVal,
+    kreditVal,
+    saldoVal,
     data.tgl_penagihan || '',
     data.lampiran || ''
   ];
   sheet.appendRow(row);
-  return sheet.getLastRow();
+  var newRow = sheet.getLastRow();
+  // Set format Rupiah pada kolom H, I, J
+  sheet.getRange(newRow, 8, 1, 3).setNumberFormat('[$Rp-421] #,##0');
+  return newRow;
 }
 
 /**
@@ -132,6 +140,12 @@ function readCashData() {
     var tgl = row[0];
     if (!tgl && !row[6] && !row[7] && !row[8]) continue; // Skip empty rows
 
+    // parseRupiah sebagai safety net: jika sel berisi angka, langsung return angka.
+    // Jika sel berisi string "Rp50.000", parse ke 50000.
+    var debitVal = (typeof row[7] === 'number') ? row[7] : parseRupiah(row[7]);
+    var kreditVal = (typeof row[8] === 'number') ? row[8] : parseRupiah(row[8]);
+    var saldoVal = (typeof row[9] === 'number') ? row[9] : parseRupiah(row[9]);
+
     result.push({
       _row: startRow + i,
       row_index: startRow + i,
@@ -143,9 +157,9 @@ function readCashData() {
       keterangan: String(row[4] || row[3] || ''),
       pic: String(row[5] || ''),
       no_id: String(row[6] || ''),
-      debit: Number(row[7]) || 0,
-      kredit: Number(row[8]) || 0,
-      saldo_akhir: Number(row[9]) || 0,
+      debit: debitVal,
+      kredit: kreditVal,
+      saldo_akhir: saldoVal,
       tgl_penagihan: formatDateISO(row[10]),
       lampiran: String(row[11] || '')
     });
@@ -233,16 +247,21 @@ function deleteCashRow(rowIndex) {
  */
 function appendBonRow(data) {
   var sheet = getBonSheet();
+  // Pastikan nominal adalah angka
+  var nominalVal = typeof data.nominal === 'number' ? data.nominal : parseRupiah(data.nominal);
   var row = [
     data.id_bon || generateNoId('BON'),
     data.tanggal || formatDateISO(new Date()),
     data.pic || '',
     data.keterangan || '',
-    data.nominal || 0,
+    nominalVal,
     data.status || 'BELUM'
   ];
   sheet.appendRow(row);
-  return sheet.getLastRow();
+  var newRow = sheet.getLastRow();
+  // Set format Rupiah pada kolom E (Nominal)
+  sheet.getRange(newRow, 5).setNumberFormat('[$Rp-421] #,##0');
+  return newRow;
 }
 
 /**
@@ -262,6 +281,8 @@ function readBonData() {
 
     var tgl = row[1];
     var daysAgo = calculateDaysAgo(tgl);
+    // parseRupiah safety net: backward compat dengan data lama yang masih string
+    var nominalVal = (typeof row[4] === 'number') ? row[4] : parseRupiah(row[4]);
 
     result.push({
       _row: i + 2,
@@ -270,7 +291,7 @@ function readBonData() {
       tanggal: formatDateISO(tgl),
       pic: String(row[2] || ''),
       keterangan: String(row[3] || ''),
-      nominal: Number(row[4]) || 0,
+      nominal: nominalVal,
       status: String(row[5] || 'BELUM').toUpperCase(),
       days_ago: daysAgo,
       alert_level: getAlertLevel(daysAgo, row[5])
@@ -370,14 +391,17 @@ function recalculateSaldoAkhir() {
   var saldos = [];
 
   for (var i = 0; i < data.length; i++) {
-    var debit = Number(data[i][7]) || 0;
-    var kredit = Number(data[i][8]) || 0;
+    // parseRupiah safety net: jika angka, langsung return angka. Jika string Rp, parse.
+    var debit = (typeof data[i][7] === 'number') ? data[i][7] : parseRupiah(data[i][7]);
+    var kredit = (typeof data[i][8] === 'number') ? data[i][8] : parseRupiah(data[i][8]);
     runningSaldo += (debit - kredit);
     saldos.push([runningSaldo]);
   }
 
-  // Write bulk back to column J
+  // Write bulk back to column J sebagai angka
   sheet.getRange(2, 10, saldos.length, 1).setValues(saldos);
+  // Set format Rupiah pada kolom J
+  sheet.getRange(2, 10, saldos.length, 1).setNumberFormat('[$Rp-421] #,##0');
   return runningSaldo;
 }
 
@@ -386,6 +410,51 @@ function recalculateSaldoAkhir() {
  */
 function _recalculateCashBalances(sheet, startRow) {
   return recalculateSaldoAkhir();
+}
+
+/**
+ * MIGRASI DATA (jalankan sekali):
+ * Convert kolom Debit/Kredit/Saldo (Buku Kas) dan Nominal (Buku Bon)
+ * dari string "Rp50.000" ke angka 50000 + format display Rupiah.
+ */
+function migrateStringToNumber() {
+  var cashSheet = getCashSheet();
+  var bonSheet = getBonSheet();
+
+  // ─── Migrasi Buku Kas: Kolom H (Debit), I (Kredit), J (Saldo Akhir) ───
+  var cashLastRow = cashSheet.getLastRow();
+  if (cashLastRow >= 2) {
+    var cashData = cashSheet.getRange(2, 8, cashLastRow - 1, 3).getValues(); // H, I, J
+    var converted = [];
+    for (var i = 0; i < cashData.length; i++) {
+      var debit = (typeof cashData[i][0] === 'number') ? cashData[i][0] : parseRupiah(cashData[i][0]);
+      var kredit = (typeof cashData[i][1] === 'number') ? cashData[i][1] : parseRupiah(cashData[i][1]);
+      var saldo = (typeof cashData[i][2] === 'number') ? cashData[i][2] : parseRupiah(cashData[i][2]);
+      converted.push([debit, kredit, saldo]);
+    }
+    cashSheet.getRange(2, 8, converted.length, 3).setValues(converted);
+    cashSheet.getRange(2, 8, converted.length, 3).setNumberFormat('[$Rp-421] #,##0');
+    Logger.log('✅ Migrasi Buku Kas: ' + converted.length + ' baris dikonversi');
+  }
+
+  // ─── Migrasi Buku Bon: Kolom E (Nominal) ───
+  var bonLastRow = bonSheet.getLastRow();
+  if (bonLastRow >= 2) {
+    var bonData = bonSheet.getRange(2, 5, bonLastRow - 1, 1).getValues(); // E
+    var bonConverted = [];
+    for (var j = 0; j < bonData.length; j++) {
+      var nom = (typeof bonData[j][0] === 'number') ? bonData[j][0] : parseRupiah(bonData[j][0]);
+      bonConverted.push([nom]);
+    }
+    bonSheet.getRange(2, 5, bonConverted.length, 1).setValues(bonConverted);
+    bonSheet.getRange(2, 5, bonConverted.length, 1).setNumberFormat('[$Rp-421] #,##0');
+    Logger.log('✅ Migrasi Buku Bon: ' + bonConverted.length + ' baris dikonversi');
+  }
+
+  // ─── Rekalkulasi saldo dari awal ───
+  recalculateSaldoAkhir();
+  Logger.log('✅ Migrasi selesai. Saldo telah dihitung ulang.');
+  return 'Migrasi selesai.';
 }
 
 // ─── SETUP DASHBOARD VISUAL ─────────────────────
