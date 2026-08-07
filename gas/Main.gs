@@ -304,111 +304,123 @@ function fullSetup() {
 }
 
 /**
- * Installed Trigger onEdit Google Sheets
- * Memantau perubahan di sheet Bon_log untuk menyinkronkan ke Cash_log
+ * Simple & Installed Trigger onEdit Google Sheets
+ * Otomatis berjalan setiap kali ada pengeditan di Google Spreadsheet (Cash_log atau Bon_log)
  */
-function onSpreadsheetEdit(e) {
+function onEdit(e) {
   if (!e) return;
   try {
     var range = e.range;
     var sheet = range.getSheet();
     var sheetName = sheet.getName();
     
-    // Hanya proses jika terjadi di sheet Bon_log
-    if (sheetName !== 'Bon_log') return;
-    
-    var startRow = range.getRow();
-    var numRows = range.getNumRows();
-    
-    for (var r = 0; r < numRows; r++) {
-      var row = startRow + r;
-      if (row < 2) continue; // Jangan proses header
-      _syncBonRowToCash(row);
+    if (sheetName === 'Bon_log') {
+      var startRow = range.getRow();
+      var numRows = range.getNumRows();
+      for (var r = 0; r < numRows; r++) {
+        var row = startRow + r;
+        if (row < 2) continue; // Skip header
+        _syncBonRowToCash(row);
+      }
+    } else if (sheetName === 'Cash_log') {
+      // Rekalkulasi Saldo Akhir otomatis jika ada perubahan di Cash_log
+      recalculateSaldoAkhir();
     }
   } catch (err) {
-    Logger.log('onSpreadsheetEdit error: ' + err.message);
+    Logger.log('onEdit error: ' + err.message);
   }
 }
 
 /**
  * Setup installed trigger untuk edit spreadsheet
- * Jalankan ini sekali saja dari Editor Script (klik tombol Run pada fungsi ini)
  */
 function setupEditTrigger() {
   var ss = getSpreadsheet();
   
-  // Hapus trigger lama jika ada untuk menghindari duplikasi
   var triggers = ScriptApp.getProjectTriggers();
   for (var i = 0; i < triggers.length; i++) {
-    if (triggers[i].getHandlerFunction() === 'onSpreadsheetEdit') {
+    if (triggers[i].getHandlerFunction() === 'onEdit' || triggers[i].getHandlerFunction() === 'onSpreadsheetEdit') {
       ScriptApp.deleteTrigger(triggers[i]);
     }
   }
   
-  // Buat trigger baru
-  ScriptApp.newTrigger('onSpreadsheetEdit')
+  ScriptApp.newTrigger('onEdit')
     .forSpreadsheet(ss)
     .onEdit()
     .create();
   
-  Logger.log('✅ Installed Edit Trigger berhasil didaftarkan untuk fungsi onSpreadsheetEdit');
+  Logger.log('✅ Edit Trigger berhasil didaftarkan untuk fungsi onEdit');
 }
 
 /**
- * Sinkronisasikan satu baris bon ke Cash_log
+ * Sinkronisasikan satu baris bon di Bon_log ke Cash_log
  */
 function _syncBonRowToCash(row) {
   var sheet = getBonSheet();
   var values = sheet.getRange(row, 1, 1, 6).getValues()[0];
   var idBon = String(values[0] || '').trim();
+  var tglRaw = values[1];
   var pic = String(values[2] || '').trim();
   var keterangan = String(values[3] || '').trim();
   var nominal = parseRupiah(values[4]);
   var status = String(values[5] || 'BELUM').trim().toUpperCase();
   
-  // Jika ID BON, PIC, atau nominal belum diisi lengkap/valid, jangan sinkronisasi dulu
-  if (!idBon || !pic || nominal <= 0) return;
+  // Jika PIC atau nominal belum diisi lengkap/valid, jangan sinkronkan dulu
+  if (!pic || nominal <= 0) return;
+
+  // Auto-generate ID BON jika kosong
+  if (!idBon) {
+    idBon = generateNoId('BON');
+    sheet.getRange(row, 1).setValue(idBon);
+  }
   
   // Cek apakah transaksi Kredit (bon baru) atau Debit (pertanggungan) sudah ada di Cash_log
-  var cashRows = readCashRows();
+  var cashRows = readCashData();
   var existKredit = false;
   var existDebit = false;
   
   for (var i = 0; i < cashRows.length; i++) {
     var cashRow = cashRows[i];
-    if (String(cashRow.no_id).toUpperCase() === idBon.toUpperCase()) {
-      if (parseRupiah(cashRow.kredit) > 0) {
+    if (String(cashRow.no_id).trim().toUpperCase() === idBon.toUpperCase()) {
+      if (Number(cashRow.kredit) > 0) {
         existKredit = true;
       }
-      if (parseRupiah(cashRow.debit) > 0) {
+      if (Number(cashRow.debit) > 0) {
         existDebit = true;
       }
     }
   }
   
-  // 1. Jika Kredit belum ada, buat transaksi Kredit di Cash_log (pencatatan bon baru)
+  // 1. Jika Kredit belum ada di Cash_log, buat transaksi Kredit (Kas Keluar)
   if (!existKredit) {
-    addCashTransaction({
-      keterangan: 'Bon - ' + pic + ' - ' + keterangan,
-      jumlah: nominal,
+    appendCashRow({
+      keterangan_kredit: 'Bon - ' + pic + ' - ' + (keterangan || 'Kasbon Karyawan'),
+      keterangan: 'Bon - ' + pic + ' - ' + (keterangan || 'Kasbon Karyawan'),
+      kredit: nominal,
+      debit: 0,
       jenis: 'KREDIT',
       pic: pic,
       no_id: idBon,
-      tanggal: parseDate(values[1]) || new Date(),
-      sumber: 'GSHEET_ONEDIT'
+      akun: 'Kasbon',
+      tanggal: formatDateISO(tglRaw) || formatDateISO(new Date())
     });
+    recalculateSaldoAkhir();
   }
   
-  // 2. Jika status adalah SUDAH atau LUNAS, dan Debit belum ada, buat transaksi Debit di Cash_log
+  // 2. Jika status diset ke SUDAH / LUNAS, dan Debit belum ada, buat transaksi Debit (Kas Masuk / Pertanggungan)
   if ((status === 'SUDAH' || status === 'LUNAS') && !existDebit) {
-    addCashTransaction({
-      keterangan: 'Pertanggungan Bon - ' + pic + ' - ' + keterangan,
-      jumlah: nominal,
+    appendCashRow({
+      keterangan_debit: 'Pertanggungan Bon - ' + pic + ' - ' + (keterangan || 'Kasbon Karyawan'),
+      keterangan: 'Pertanggungan Bon - ' + pic + ' - ' + (keterangan || 'Kasbon Karyawan'),
+      debit: nominal,
+      kredit: 0,
       jenis: 'DEBIT',
       pic: pic,
       no_id: idBon,
-      sumber: 'GSHEET_ONEDIT'
+      akun: 'Pertanggungan Bon',
+      tanggal: formatDateISO(new Date())
     });
+    recalculateSaldoAkhir();
   }
 }
 
