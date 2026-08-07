@@ -1,5 +1,7 @@
-const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbzZqxXmgtO8vXQk9Uqxs95CNPAwP6CC_o0jV2AhidCfVp-7wpwhBPQ37BWD_9bsKnM04w/exec';
-const GAS_URL = (process.env.NEXT_PUBLIC_GAS_URL || DEFAULT_GAS_URL).trim();
+const LIVE_WORKING_URL = 'https://script.google.com/macros/s/AKfycbzZqxXmgtO8vXQk9Uqxs95CNPAwP6CC_o0jV2AhidCfVp-7wpwhBPQ37BWD_9bsKnM04w/exec';
+const rawEnvUrl = (process.env.NEXT_PUBLIC_GAS_URL || '').trim();
+const GAS_URL = (rawEnvUrl && rawEnvUrl.startsWith('http') && rawEnvUrl.includes('/exec')) ? rawEnvUrl : LIVE_WORKING_URL;
+
 const API_KEY = (process.env.NEXT_PUBLIC_API_KEY || '').trim();
 
 /**
@@ -8,11 +10,6 @@ const API_KEY = (process.env.NEXT_PUBLIC_API_KEY || '').trim();
  * @param {Object} params - Additional query parameters
  */
 export async function fetchFromGas(action, params = {}) {
-  if (!GAS_URL) {
-    console.warn('NEXT_PUBLIC_GAS_URL is not set!');
-    return { success: false, error: 'API URL belum diatur di Vercel (NEXT_PUBLIC_GAS_URL)' };
-  }
-
   try {
     const url = new URL(GAS_URL);
     url.searchParams.append('action', action);
@@ -51,14 +48,6 @@ export async function fetchFromGas(action, params = {}) {
  * @param {Object} body - Request body
  */
 export async function postToGas(action, body = {}) {
-  if (!GAS_URL) {
-    console.warn('NEXT_PUBLIC_GAS_URL is not set!');
-    return { 
-      success: true, 
-      message: 'Data berhasil disimpan (Mode Demo/Offline. Sila atur NEXT_PUBLIC_GAS_URL di Vercel untuk sinkronisasi ke GSheet).' 
-    };
-  }
-
   try {
     const payload = {
       action,
