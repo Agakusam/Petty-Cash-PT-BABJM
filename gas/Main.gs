@@ -312,9 +312,9 @@ function onEdit(e) {
   try {
     var range = e.range;
     var sheet = range.getSheet();
-    var sheetName = sheet.getName();
+    var sheetName = sheet.getName().trim().toLowerCase();
     
-    if (sheetName === 'Bon_log') {
+    if (sheetName === 'buku bon' || sheetName === 'bon_log') {
       var startRow = range.getRow();
       var numRows = range.getNumRows();
       for (var r = 0; r < numRows; r++) {
@@ -322,8 +322,8 @@ function onEdit(e) {
         if (row < 2) continue; // Skip header
         _syncBonRowToCash(row);
       }
-    } else if (sheetName === 'Cash_log') {
-      // Rekalkulasi Saldo Akhir otomatis jika ada perubahan di Cash_log
+    } else if (sheetName === 'buku kas' || sheetName === 'cash_log') {
+      // Rekalkulasi Saldo Akhir otomatis jika ada perubahan di Buku Kas
       recalculateSaldoAkhir();
     }
   } catch (err) {

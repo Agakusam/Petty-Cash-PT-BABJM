@@ -3,41 +3,41 @@
  * SheetHelper.gs — Google Sheets Utilities
  * Sistem Petty Cash PT BABJM
  * ============================================
- * Kolom sesuai struktur aktual spreadsheet
+ * Kolom sesuai struktur aktual spreadsheet (Buku Kas & Buku Bon)
  */
 
 var SPREADSHEET_ID = '18_zWVbJZOX90vkPl9NHikXimgOUSZDSE5EOGiVqbYpk';
 
 var SHEETS = {
-  CASH_LOG: 'Cash_log',
-  BON_LOG: 'Bon_log',
+  CASH_LOG: 'Buku Kas',
+  BON_LOG: 'Buku Bon',
   DASHBOARD: 'Dashboard'
 };
 
-// Kolom Cash_log: A-J (index 1-10)
+// Kolom Buku Kas: A-L (index 1-12)
 var CASH_COLS = {
-  TANGGAL: 1,           // A: PT BABJM LAPORAN PETTY CASH Tanggal
+  TANGGAL: 1,           // A: Tanggal
   TGL_NOTA: 2,          // B: Tgl. Nota
   AKUN: 3,              // C: Akun
   KETERANGAN_DEBIT: 4,  // D: Keterangan Debit
-  KETERANGAN_KREDIT: 5, // E: Keterangan Kredit (labeled "Keterangan")
+  KETERANGAN_KREDIT: 5, // E: Keterangan Kredit
   PIC: 6,               // F: PIC
   NO_ID: 7,             // G: NO. ID
-  DEBIT: 8,             // H: Debit (nominal)
-  KREDIT: 9,            // I: Kredit (nominal)
-  SALDO_AKHIR: 10,      // J: Saldo Akhir
+  DEBIT: 8,             // H: Debit
+  KREDIT: 9,            // I: Kredit
+  SALDO_AKHIR: 10,      // J: Saldo Akhir (OTOMATIS)
   TGL_PENAGIHAN: 11,    // K: Tgl. Penagihan
   LAMPIRAN: 12          // L: Lampiran
 };
 
-// Kolom Bon_log: A-F (index 1-6)
+// Kolom Buku Bon: A-F (index 1-6)
 var BON_COLS = {
-  ID_BON: 1,        // A: ID BON
-  TANGGAL: 2,       // B: Tanggal
-  PIC: 3,           // C: PIC
-  KETERANGAN: 4,    // D: Keterangan
-  NOMINAL: 5,       // E: Nominal
-  STATUS: 6         // F: Status
+  ID_BON: 1,        // A: ID BON (OTOMATIS)
+  TANGGAL: 2,       // B: Tanggal (OTOMATIS)
+  PIC: 3,           // C: PIC (MANUAL/TELEGRAM)
+  KETERANGAN: 4,    // D: Keterangan (MANUAL/TELEGRAM)
+  NOMINAL: 5,       // E: Nominal (MANUAL/TELEGRAM)
+  STATUS: 6         // F: Status (OTOMATIS 'BELUM' JIKA KOSONG)
 };
 
 // ─── SPREADSHEET ACCESS ─────────────────────
@@ -60,12 +60,27 @@ function getSpreadsheet() {
 
 function getSheet(name) {
   var ss = getSpreadsheet();
-  var sheet = ss.getSheetByName(name);
+  var targetName = (name || '').trim();
+  var sheet = ss.getSheetByName(targetName);
+  
   if (!sheet) {
-    sheet = ss.insertSheet(name);
-    if (name === SHEETS.CASH_LOG) {
+    // Cari fleksibel: Buku Kas vs Cash_log, Buku Bon vs Bon_log
+    var allSheets = ss.getSheets();
+    for (var i = 0; i < allSheets.length; i++) {
+      var sName = allSheets[i].getName().trim();
+      if ((targetName === 'Buku Kas' || targetName === 'Cash_log') && (sName === 'Buku Kas' || sName === 'Cash_log')) {
+        return allSheets[i];
+      }
+      if ((targetName === 'Buku Bon' || targetName === 'Bon_log') && (sName === 'Buku Bon' || sName === 'Bon_log')) {
+        return allSheets[i];
+      }
+    }
+    
+    // Jika benar-benar belum ada, buat sheet baru dengan nama resmi
+    sheet = ss.insertSheet(targetName);
+    if (targetName === 'Buku Kas' || targetName === SHEETS.CASH_LOG) {
       sheet.appendRow(["Tanggal", "Tgl. Nota", "Akun", "Keterangan Debit", "Keterangan Kredit", "PIC", "NO. ID", "Debit", "Kredit", "Saldo Akhir", "Tgl. Penagihan", "Lampiran"]);
-    } else if (name === SHEETS.BON_LOG) {
+    } else if (targetName === 'Buku Bon' || targetName === SHEETS.BON_LOG) {
       sheet.appendRow(["ID BON", "Tanggal", "PIC", "Keterangan", "Nominal", "Status"]);
     }
   }
@@ -75,12 +90,10 @@ function getSheet(name) {
 function getCashSheet() { return getSheet(SHEETS.CASH_LOG); }
 function getBonSheet() { return getSheet(SHEETS.BON_LOG); }
 
-// ─── CASH_LOG OPERATIONS ────────────────────
+// ─── BUKU KAS OPERATIONS ────────────────────
 
 /**
- * Append row ke Cash_log
- * @param {Object} data {tanggal, tgl_nota, akun, keterangan, pic, no_id, debit, kredit, saldo_akhir, tgl_penagihan}
- * @return {number} New row number
+ * Append row ke Buku Kas
  */
 function appendCashRow(data) {
   var sheet = getCashSheet();
@@ -103,8 +116,7 @@ function appendCashRow(data) {
 }
 
 /**
- * Baca semua data Cash_log
- * Skip header (row 1 s/d 6 if formatted, or row 1)
+ * Baca semua data Buku Kas
  */
 function readCashData() {
   var sheet = getCashSheet();
@@ -142,7 +154,7 @@ function readCashData() {
 }
 
 /**
- * Cari row Cash_log berdasarkan NO. ID (kolom G)
+ * Cari row Buku Kas berdasarkan NO. ID (kolom G)
  */
 function findCashRowByNoId(noId) {
   var sheet = getCashSheet();
@@ -152,14 +164,14 @@ function findCashRowByNoId(noId) {
   var ids = sheet.getRange(2, 7, lastRow - 1, 1).getValues();
   for (var i = 0; i < ids.length; i++) {
     if (String(ids[i][0]).trim() === String(noId).trim()) {
-      return i + 2; // 1-based row index
+      return i + 2;
     }
   }
   return null;
 }
 
 /**
- * Update row Cash_log
+ * Update row Buku Kas
  */
 function updateCashRow(rowIndex, data) {
   var sheet = getCashSheet();
@@ -176,18 +188,17 @@ function updateCashRow(rowIndex, data) {
 }
 
 /**
- * Hapus row Cash_log
+ * Hapus row Buku Kas
  */
 function deleteCashRow(rowIndex) {
   var sheet = getCashSheet();
   sheet.deleteRow(rowIndex);
 }
 
-// ─── BON_LOG OPERATIONS ────────────────────
+// ─── BUKU BON OPERATIONS ────────────────────
 
 /**
- * Append row ke Bon_log
- * @param {Object} data {id_bon, tanggal, pic, keterangan, nominal, status}
+ * Append row ke Buku Bon
  */
 function appendBonRow(data) {
   var sheet = getBonSheet();
@@ -204,7 +215,7 @@ function appendBonRow(data) {
 }
 
 /**
- * Baca semua data Bon_log
+ * Baca semua data Buku Bon
  */
 function readBonData() {
   var sheet = getBonSheet();
@@ -238,7 +249,7 @@ function readBonData() {
 }
 
 /**
- * Cari row Bon_log berdasarkan ID BON (kolom A)
+ * Cari row Buku Bon berdasarkan ID BON (kolom A)
  */
 function findBonRowById(idBon) {
   var sheet = getBonSheet();
@@ -255,7 +266,7 @@ function findBonRowById(idBon) {
 }
 
 /**
- * Update status Bon_log ke SUDAH (Lunas)
+ * Update status Buku Bon ke SUDAH (Lunas)
  */
 function markBonLunas(idBon) {
   var rowIndex = findBonRowById(idBon);
@@ -269,8 +280,7 @@ function markBonLunas(idBon) {
 // ─── REKALSULASI SALDO AKHIR ─────────────────────
 
 /**
- * Hitung Ulang Kolom J (Saldo Akhir) di Cash_log dari atas ke bawah.
- * PENTING: Dijalankan tiap kali ada insert/update/delete kas!
+ * Hitung Ulang Kolom J (Saldo Akhir) di Buku Kas dari atas ke bawah.
  */
 function recalculateSaldoAkhir() {
   var sheet = getCashSheet();
@@ -343,11 +353,11 @@ function setupGSheetDashboard() {
   d.getRange('H5').setValue('SALDO AWAL').setBackground('#0369a1').setFontColor('#FFFFFF').setFontWeight('bold').setHorizontalAlignment('center');
   d.getRange('I5').setValue('SALDO AKHIR').setBackground('#0f172a').setFontColor('#FFFFFF').setFontWeight('bold').setHorizontalAlignment('center');
   
-  // Summary Metrics Values Formulations (using Indonesian semicolon divider as required by sheet locale)
-  d.getRange('E6').setFormula('=SUMIFS(Cash_log!H7:H; Cash_log!A7:A; ">="&C5; Cash_log!A7:A; "<="&C6)').setFontWeight('bold').setFontSize(12).setHorizontalAlignment('center').setNumberFormat('[$Rp-421] #,##0');
-  d.getRange('F6').setFormula('=SUMIFS(Cash_log!I7:I; Cash_log!A7:A; ">="&C5; Cash_log!A7:A; "<="&C6)').setFontWeight('bold').setFontSize(12).setHorizontalAlignment('center').setNumberFormat('[$Rp-421] #,##0');
-  d.getRange('G6').setFormula('=COUNTIFS(Cash_log!A7:A; ">="&C5; Cash_log!A7:A; "<="&C6)').setFontWeight('bold').setFontSize(12).setHorizontalAlignment('center').setNumberFormat('#,##0');
-  d.getRange('H6').setFormula('=XLOOKUP(C5-1; FILTER(Cash_log!A$6:A; ISNUMBER(Cash_log!A$6:A) * (Cash_log!J$6:J<>"")); FILTER(Cash_log!J$6:J; ISNUMBER(Cash_log!A$6:A) * (Cash_log!J$6:J<>"")); Cash_log!J$6; -1; -1)').setFontWeight('bold').setFontSize(12).setHorizontalAlignment('center').setNumberFormat('[$Rp-421] #,##0');
+  // Summary Metrics Values Formulations
+  d.getRange('E6').setFormula('=SUMIFS(\'Buku Kas\'!H2:H; \'Buku Kas\'!A2:A; ">="&C5; \'Buku Kas\'!A2:A; "<="&C6)').setFontWeight('bold').setFontSize(12).setHorizontalAlignment('center').setNumberFormat('[$Rp-421] #,##0');
+  d.getRange('F6').setFormula('=SUMIFS(\'Buku Kas\'!I2:I; \'Buku Kas\'!A2:A; ">="&C5; \'Buku Kas\'!A2:A; "<="&C6)').setFontWeight('bold').setFontSize(12).setHorizontalAlignment('center').setNumberFormat('[$Rp-421] #,##0');
+  d.getRange('G6').setFormula('=COUNTIFS(\'Buku Kas\'!A2:A; ">="&C5; \'Buku Kas\'!A2:A; "<="&C6)').setFontWeight('bold').setFontSize(12).setHorizontalAlignment('center').setNumberFormat('#,##0');
+  d.getRange('H6').setFormula('=XLOOKUP(C5-1; FILTER(\'Buku Kas\'!A$2:A; ISNUMBER(\'Buku Kas\'!A$2:A) * (\'Buku Kas\'!J$2:J<>"")); FILTER(\'Buku Kas\'!J$2:J; ISNUMBER(\'Buku Kas\'!A$2:A) * (\'Buku Kas\'!J$2:J<>"")); \'Buku Kas\'!J$2; -1; -1)').setFontWeight('bold').setFontSize(12).setHorizontalAlignment('center').setNumberFormat('[$Rp-421] #,##0');
   d.getRange('I6').setFormula('=H6+E6-F6').setFontWeight('bold').setFontSize(12).setHorizontalAlignment('center').setNumberFormat('[$Rp-421] #,##0');
 
   // Borders for Summary Cards and Input
@@ -366,7 +376,7 @@ function setupGSheetDashboard() {
   d.setRowHeight(9, 25);
 
   // Table Data Filter Formula
-  d.getRange('B10').setFormula('=IFERROR(FILTER(Cash_log!A7:L; Cash_log!A7:A>=C5; Cash_log!A7:A<=C6); "Tidak ada transaksi dalam rentang ini")');
+  d.getRange('B10').setFormula('=IFERROR(FILTER(\'Buku Kas\'!A2:L; \'Buku Kas\'!A2:A>=C5; \'Buku Kas\'!A2:A<=C6); "Tidak ada transaksi dalam rentang ini")');
   
   // Format table data columns
   d.getRange('B10:B1000').setHorizontalAlignment('center');
