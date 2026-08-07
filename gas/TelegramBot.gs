@@ -221,9 +221,9 @@ function handleCallbackQuery(query) {
     case 'kas_confirm':
       var confirmState = getState(chatId);
       if (confirmState) {
-        _executeKasTransaction(chatId, confirmState, username);
-        clearState(chatId);
-        editTelegramMessage(chatId, messageId, '⏳ Menyimpan...');
+        clearState(chatId); // Clear state first to block duplicate clicks
+        editTelegramMessage(chatId, messageId, '⏳ Menyimpan transaksi kas...');
+        _executeKasTransaction(chatId, confirmState, username, messageId);
       }
       break;
 
@@ -235,9 +235,9 @@ function handleCallbackQuery(query) {
     case 'bon_confirm':
       var confirmStateBon = getState(chatId);
       if (confirmStateBon) {
-        _executeBonTransaction(chatId, confirmStateBon, username);
-        clearState(chatId);
-        editTelegramMessage(chatId, messageId, '⏳ Menyimpan...');
+        clearState(chatId); // Clear state first to block duplicate clicks
+        editTelegramMessage(chatId, messageId, '⏳ Menyimpan pencatatan bon...');
+        _executeBonTransaction(chatId, confirmStateBon, username, messageId);
       }
       break;
 
@@ -705,7 +705,7 @@ function _showKasConfirmation(chatId, state) {
   );
 }
 
-function _executeKasTransaction(chatId, state, username) {
+function _executeKasTransaction(chatId, state, username, messageId) {
   var result = addCashTransaction({
     keterangan: state.deskripsi,
     jumlah: state.jumlah,
@@ -716,17 +716,27 @@ function _executeKasTransaction(chatId, state, username) {
     sumber: 'TELEGRAM'
   });
 
+  var emoji = state.jenis === 'DEBIT' ? '🟢' : '🔴';
+  var label = state.jenis === 'DEBIT' ? 'Kas Masuk' : 'Kas Keluar';
+
   if (result.success) {
-    var emoji = state.jenis === 'DEBIT' ? '🟢' : '🔴';
-    var label = state.jenis === 'DEBIT' ? 'Kas Masuk' : 'Kas Keluar';
-    sendTelegramMessage(chatId,
-      '✅ <b>Tersimpan!</b>\n\n'
+    var textMsg = '✅ <b>Tersimpan!</b>\n\n'
       + emoji + ' ' + label + ': ' + result.data.jumlah_formatted + '\n'
       + '📝 ' + result.data.keterangan + '\n'
-      + '💳 Saldo: ' + result.data.saldo_formatted
-    );
+      + '💳 Saldo: ' + result.data.saldo_formatted;
+
+    if (messageId) {
+      editTelegramMessage(chatId, messageId, textMsg);
+    } else {
+      sendTelegramMessage(chatId, textMsg);
+    }
   } else {
-    sendTelegramMessage(chatId, '❌ Gagal: ' + result.error);
+    var errText = '❌ Gagal: ' + result.error;
+    if (messageId) {
+      editTelegramMessage(chatId, messageId, errText);
+    } else {
+      sendTelegramMessage(chatId, errText);
+    }
   }
 }
 
@@ -752,7 +762,7 @@ function _showBonConfirmation(chatId, state) {
   );
 }
 
-function _executeBonTransaction(chatId, state, username) {
+function _executeBonTransaction(chatId, state, username, messageId) {
   var result = addBon({
     pic: state.pic,
     jumlah: state.jumlah,
@@ -762,16 +772,25 @@ function _executeBonTransaction(chatId, state, username) {
 
   if (result.success) {
     notifyNewBon(result.data);
-    sendTelegramMessage(chatId,
-      '📋 <b>Bon Berhasil Dicatat!</b>\n\n'
+    var textMsg = '📋 <b>Bon Berhasil Dicatat!</b>\n\n'
       + '🆔 ' + result.data.id_bon + '\n'
       + '👤 ' + result.data.pic + '\n'
       + '💰 ' + result.data.nominal_formatted + '\n'
       + '📝 ' + result.data.keterangan + '\n'
-      + '⏳ Status: BELUM'
-    );
+      + '⏳ Status: BELUM';
+
+    if (messageId) {
+      editTelegramMessage(chatId, messageId, textMsg);
+    } else {
+      sendTelegramMessage(chatId, textMsg);
+    }
   } else {
-    sendTelegramMessage(chatId, '❌ Gagal: ' + result.error);
+    var errText = '❌ Gagal: ' + result.error;
+    if (messageId) {
+      editTelegramMessage(chatId, messageId, errText);
+    } else {
+      sendTelegramMessage(chatId, errText);
+    }
   }
 }
 
