@@ -61,6 +61,13 @@ function sendTelegramMessage(chatId, text, keyboard) {
     var result = JSON.parse(response.getContentText());
     if (!result.ok) {
       Logger.log('Telegram API error: ' + JSON.stringify(result));
+      // Fallback: retry without parse_mode if HTML parsing failed
+      if (payload.parse_mode) {
+        delete payload.parse_mode;
+        options.payload = JSON.stringify(payload);
+        var retryResp = UrlFetchApp.fetch(TELEGRAM_API + token + '/sendMessage', options);
+        return JSON.parse(retryResp.getContentText());
+      }
     }
     return result;
   } catch (e) {

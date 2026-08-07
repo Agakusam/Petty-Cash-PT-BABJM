@@ -301,3 +301,15 @@ function parseBonQuick(text) {
 
   return { pic: pic, jumlah: amount, keterangan: keterangan };
 }
+
+/**
+ * Escape HTML special characters for Telegram HTML parse_mode
+ */
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
